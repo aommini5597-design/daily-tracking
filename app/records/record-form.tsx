@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { createDailyRecord } from '@/actions/records'
 import { Loader2 } from 'lucide-react'
 
@@ -16,6 +16,7 @@ export default function RecordForm({
   brands: Brand[]
   isSuperAdmin?: boolean
 }) {
+  const formRef = useRef<HTMLFormElement>(null)
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -39,7 +40,10 @@ export default function RecordForm({
     setError(null)
     setSuccess(false)
 
-    const formData = new FormData(e.currentTarget)
+    const formElement = formRef.current
+    if (!formElement) return
+
+    const formData = new FormData(formElement)
 
     try {
       const res = await createDailyRecord(formData)
@@ -47,7 +51,8 @@ export default function RecordForm({
         setError(res.error)
       } else {
         setSuccess(true)
-        e.currentTarget.reset()
+        // ล้างข้อมูลฟอร์มอย่างปลอดภัยผ่าน ref
+        formElement.reset()
         setAdsExpense('')
         setFeeExpense('')
         setShippingExpense('')
@@ -56,7 +61,7 @@ export default function RecordForm({
         setTimeout(() => setSuccess(false), 4000)
       }
     } catch (err: any) {
-      setError(err?.message || 'เกิดข้อผิดพลาด')
+      setError(err?.message || 'เกิดข้อผิดพลาดในการบันทึก')
     } finally {
       setLoading(false)
     }
@@ -84,7 +89,7 @@ export default function RecordForm({
         </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form ref={formRef} onSubmit={handleSubmit} className="space-y-5">
         <div>
           <label className="block text-sm font-bold !text-black mb-1.5">วันที่</label>
           <input
