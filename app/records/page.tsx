@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { getBrands, getDailyRecords } from '@/actions/records'
 import RecordForm from './record-form'
 import Link from 'next/link'

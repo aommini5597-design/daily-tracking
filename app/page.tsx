@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { getDailyRecords } from '@/actions/records'
 import { DollarSign, ArrowDownRight, ArrowUpRight, ReceiptText } from 'lucide-react'
 import Link from 'next/link'
