@@ -16,7 +16,8 @@ export async function createDailyRecord(formData: FormData) {
 
   const date = formData.get('date') as string
   const brand_id = formData.get('brand_id') as string
-  const revenue = parseFloat(formData.get('revenue') as string) || 0
+  const deposit = parseFloat(formData.get('deposit') as string) || 0
+  const withdraw = parseFloat(formData.get('withdraw') as string) || 0
 
   const ads_expense = parseFloat(formData.get('ads_expense') as string) || 0
   const fee_expense = parseFloat(formData.get('fee_expense') as string) || 0
@@ -31,7 +32,8 @@ export async function createDailyRecord(formData: FormData) {
     {
       date,
       brand_id,
-      revenue,
+      deposit,
+      withdraw,
       expenses: total_expenses,
       ads_expense,
       fee_expense,
@@ -57,7 +59,6 @@ export async function getBrands() {
   const supabase = await createClient()
   const { data, error } = await supabase.from('brands').select('id, name').order('name')
   if (error) {
-    console.error('Error fetching brands:', error)
     return []
   }
   return data || []
@@ -71,7 +72,6 @@ export async function getDailyRecords() {
     .order('date', { ascending: false })
 
   if (error) {
-    console.error('Error fetching records:', error)
     return []
   }
   return data || []
