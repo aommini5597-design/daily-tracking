@@ -1,30 +1,26 @@
 export const dynamic = 'force-dynamic'
-import { getBrands, getDailyRecords } from '@/actions/records'
+
+import { getBrands } from '@/actions/records'
 import RecordForm from './record-form'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 
 export default async function RecordsPage() {
   const brands = await getBrands()
-  const { isSuperAdmin } = await getDailyRecords()
 
   return (
-    <main className="min-h-screen bg-slate-50 p-8">
-      <div className="max-w-xl mx-auto space-y-6">
+    <div className="min-h-screen bg-slate-50 py-10 px-4">
+      <div className="max-w-2xl mx-auto">
         <Link
           href="/"
-          className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-slate-800 transition"
+          className="inline-flex items-center gap-2 text-slate-600 hover:text-black mb-6 font-semibold"
         >
-          <ArrowLeft className="w-4 h-4 mr-1" /> กลับหน้า Dashboard
+          <ArrowLeft className="w-4 h-4" />
+          <span>กลับหน้า Dashboard</span>
         </Link>
 
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-          <h1 className="text-xl font-bold text-slate-800 mb-1">บันทึกยอดรายวัน</h1>
-          <p className="text-sm text-slate-500 mb-6">กรอกข้อมูลยอดเงินประจำวันตามแบรนด์</p>
-
-          <RecordForm brands={brands} isSuperAdmin={isSuperAdmin} />
-        </div>
+        <RecordForm brands={brands as any} />
       </div>
-    </main>
+    </div>
   )
 }

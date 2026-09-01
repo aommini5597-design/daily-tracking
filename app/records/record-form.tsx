@@ -9,12 +9,17 @@ interface Brand {
   name: string
 }
 
-export default function RecordForm({ brands }: { brands: Brand[] }) {
+export default function RecordForm({
+  brands,
+  isSuperAdmin = false,
+}: {
+  brands: Brand[]
+  isSuperAdmin?: boolean
+}) {
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // ช่องค่าใช้จ่ายแยกหมวด
   const [adsExpense, setAdsExpense] = useState<number | ''>('')
   const [feeExpense, setFeeExpense] = useState<number | ''>('')
   const [shippingExpense, setShippingExpense] = useState<number | ''>('')
@@ -51,13 +56,12 @@ export default function RecordForm({ brands }: { brands: Brand[] }) {
         setTimeout(() => setSuccess(false), 4000)
       }
     } catch (err: any) {
-      setError(err?.message || 'เกิดข้อผิดพลาดในการบันทึก')
+      setError(err?.message || 'เกิดข้อผิดพลาด')
     } finally {
       setLoading(false)
     }
   }
 
-  // กำหนดสไตล์บังคับตัวอักษรสีดำทึบชัดเจน
   const inputClass =
     'w-full px-4 py-3 bg-white !text-black placeholder:text-gray-400 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-600 focus:border-blue-600 outline-none transition'
 
@@ -70,7 +74,7 @@ export default function RecordForm({ brands }: { brands: Brand[] }) {
 
       {success && (
         <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-sm font-semibold">
-          ✓ บันทึกข้อมูลสำเร็จเรียบร้อยแล้ว
+          ✓ บันทึกข้อมูลเรียบร้อยแล้ว
         </div>
       )}
 
@@ -81,7 +85,6 @@ export default function RecordForm({ brands }: { brands: Brand[] }) {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
-        {/* วันที่ */}
         <div>
           <label className="block text-sm font-bold !text-black mb-1.5">วันที่</label>
           <input
@@ -93,7 +96,6 @@ export default function RecordForm({ brands }: { brands: Brand[] }) {
           />
         </div>
 
-        {/* เลือกแบรนด์ */}
         <div>
           <label className="block text-sm font-bold !text-black mb-1.5">เลือกแบรนด์</label>
           <select name="brand_id" required defaultValue="" className={inputClass}>
@@ -108,7 +110,6 @@ export default function RecordForm({ brands }: { brands: Brand[] }) {
           </select>
         </div>
 
-        {/* ยอดฝาก และ ยอดถอน */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-bold !text-black mb-1.5">ยอดฝาก (Deposit)</label>
@@ -132,20 +133,20 @@ export default function RecordForm({ brands }: { brands: Brand[] }) {
           </div>
         </div>
 
-        {/* หมวดหมู่ค่าใช้จ่าย */}
-        <div className="p-5 bg-amber-50/50 rounded-2xl border border-amber-200/70 space-y-4">
+        {/* กล่องหมวดหมู่ค่าใช้จ่าย */}
+        <div className="p-5 bg-amber-50/60 rounded-2xl border border-amber-200 space-y-4">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-bold text-amber-900">
+            <span className="text-sm font-bold text-amber-950">
               ค่าใช้จ่าย (Expense) - แยกตามหมวดหมู่
             </span>
-            <span className="text-xs font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
+            <span className="text-xs font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">
               รวม: ฿{totalExpenses.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
             </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold !text-black mb-1">📢 ค่าโฆษณา / Ads</label>
+              <label className="block text-xs font-bold !text-black mb-1">📢 ค่าโฆษณา / Ads</label>
               <input
                 type="number"
                 step="0.01"
@@ -157,7 +158,7 @@ export default function RecordForm({ brands }: { brands: Brand[] }) {
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold !text-black mb-1">🏷️ ค่าธรรมเนียม / ค่าคอม</label>
+              <label className="block text-xs font-bold !text-black mb-1">🏷️ ค่าธรรมเนียม / ค่าคอม</label>
               <input
                 type="number"
                 step="0.01"
@@ -169,7 +170,7 @@ export default function RecordForm({ brands }: { brands: Brand[] }) {
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold !text-black mb-1">📦 ค่าระบบ / ค่าเซิร์ฟ</label>
+              <label className="block text-xs font-bold !text-black mb-1">📦 ค่าส่ง / พัสดุ</label>
               <input
                 type="number"
                 step="0.01"
@@ -181,7 +182,7 @@ export default function RecordForm({ brands }: { brands: Brand[] }) {
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold !text-black mb-1">👥 เงินเดือน / OT</label>
+              <label className="block text-xs font-bold !text-black mb-1">👥 ค่าจ้าง / OT</label>
               <input
                 type="number"
                 step="0.01"
@@ -193,7 +194,7 @@ export default function RecordForm({ brands }: { brands: Brand[] }) {
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold !text-black mb-1">🧩 ค่าใช้จ่ายอื่นๆ</label>
+              <label className="block text-xs font-bold !text-black mb-1">🧩 ค่าใช้จ่ายอื่นๆ</label>
               <input
                 type="number"
                 step="0.01"
@@ -207,7 +208,6 @@ export default function RecordForm({ brands }: { brands: Brand[] }) {
           </div>
         </div>
 
-        {/* หมายเหตุ */}
         <div>
           <label className="block text-sm font-bold !text-black mb-1.5">หมายเหตุ</label>
           <input
@@ -218,11 +218,10 @@ export default function RecordForm({ brands }: { brands: Brand[] }) {
           />
         </div>
 
-        {/* ปุ่มบันทึก */}
         <button
           type="submit"
           disabled={loading}
-          className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 !text-white font-bold rounded-xl transition shadow-md shadow-blue-500/20 flex items-center justify-center gap-2 cursor-pointer"
+          className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 !text-white font-bold rounded-xl transition shadow-md cursor-pointer flex items-center justify-center gap-2"
         >
           {loading ? (
             <>
