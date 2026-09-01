@@ -3,12 +3,12 @@ export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { PlusCircle, Building2, LogOut, UserCheck } from 'lucide-react'
+import { PlusCircle, Building2, LogOut } from 'lucide-react'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
 
-  // 1. ตรวจสอบ User
+  // 1. ตรวจสอบการ Login ของ User
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -17,7 +17,7 @@ export default async function DashboardPage() {
     redirect('/login')
   }
 
-  // 2. ตรวจสอบ Role จากตาราง profiles
+  // 2. ตรวจสอบ Role สิทธิ์ของผู้ใช้งาน
   const { data: profile } = await supabase
     .from('profiles')
     .select('role, email')
@@ -26,7 +26,7 @@ export default async function DashboardPage() {
 
   const isSuperAdmin = profile?.role === 'super_admin'
 
-  // 3. ดึงข้อมูลบันทึกยอด
+  // 3. ดึงข้อมูลบันทึกยอดทั้งหมด
   const { data: recordsData } = await supabase
     .from('daily_records')
     .select('*, brands(name)')
@@ -34,7 +34,7 @@ export default async function DashboardPage() {
 
   const records = recordsData || []
 
-  // คำนวณสรุปยอด
+  // คำนวณยอดสรุป
   const totalDeposit = records.reduce((acc: number, r: any) => acc + (Number(r.deposit) || 0), 0)
   const totalWithdraw = records.reduce((acc: number, r: any) => acc + (Number(r.withdraw) || 0), 0)
   const totalExpenses = records.reduce((acc: number, r: any) => acc + (Number(r.expenses) || 0), 0)
@@ -70,7 +70,7 @@ export default async function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            {/* ปุ่มจัดการแบรนด์ จะแสดงเฉพาะ Super Admin เท่านั้น */}
+            {/* แสดงปุ่มจัดการแบรนด์เฉพาะ Super Admin */}
             {isSuperAdmin && (
               <Link
                 href="/brands"
@@ -102,8 +102,12 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* กล่องสรุปตัวเลข 4 ช่อง */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        {/* การ์ดสรุปตัวเลข: Super Admin เห็น 4 ช่อง, Admin เห็น 2 ช่อง (ยอดฝาก/ถอน) */}
+        <div
+          className={`grid grid-cols-1 sm:grid-cols-2 ${
+            isSuperAdmin ? 'lg:grid-cols-4' : 'lg:grid-cols-2'
+          } gap-5`}
+        >
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
             <span className="text-sm font-semibold text-slate-500">ยอดฝากรวม (Deposit)</span>
             <p className="text-2xl font-bold !text-emerald-600 mt-2">
@@ -118,22 +122,27 @@ export default async function DashboardPage() {
             </p>
           </div>
 
-          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-            <span className="text-sm font-semibold text-slate-500">ค่าใช้จ่ายรวม (Expenses)</span>
-            <p className="text-2xl font-bold !text-amber-600 mt-2">
-              ฿{totalExpenses.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
-            </p>
-          </div>
+          {/* ซ่อนค่าใช้จ่ายและกำไรสุทธิ ถ้าไม่ใช่ Super Admin */}
+          {isSuperAdmin && (
+            <>
+              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                <span className="text-sm font-semibold text-slate-500">ค่าใช้จ่ายรวม (Expenses)</span>
+                <p className="text-2xl font-bold !text-amber-600 mt-2">
+                  ฿{totalExpenses.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                </p>
+              </div>
 
-          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
-            <span className="text-sm font-semibold text-slate-500">กำไรสุทธิ (Net Profit)</span>
-            <p className={`text-2xl font-bold mt-2 ${netProfit >= 0 ? '!text-blue-600' : '!text-rose-600'}`}>
-              ฿{netProfit.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
-            </p>
-          </div>
+              <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                <span className="text-sm font-semibold text-slate-500">กำไรสุทธิ (Net Profit)</span>
+                <p className={`text-2xl font-bold mt-2 ${netProfit >= 0 ? '!text-blue-600' : '!text-rose-600'}`}>
+                  ฿{netProfit.toLocaleString('th-TH', { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+            </>
+          )}
         </div>
 
-        {/* ตารางประวัติบันทึกยอด */}
+        {/* ตารางแสดงรายการล่าสุด */}
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-6 border-b border-slate-100">
             <h2 className="text-lg font-bold !text-black">ประวัติการบันทึกยอด</h2>
@@ -146,14 +155,18 @@ export default async function DashboardPage() {
                   <th className="px-6 py-4">แบรนด์</th>
                   <th className="px-6 py-4 text-right">ยอดฝาก</th>
                   <th className="px-6 py-4 text-right">ยอดถอน</th>
-                  <th className="px-6 py-4 text-right">ค่าใช้จ่าย</th>
+                  {/* หัวตารางค่าใช้จ่าย แสดงเฉพาะ Super Admin */}
+                  {isSuperAdmin && <th className="px-6 py-4 text-right">ค่าใช้จ่าย</th>}
                   <th className="px-6 py-4">หมายเหตุ</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {records.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-6 py-8 text-center text-slate-400">
+                    <td
+                      colSpan={isSuperAdmin ? 6 : 5}
+                      className="px-6 py-8 text-center text-slate-400"
+                    >
                       ยังไม่มีรายการบันทึก
                     </td>
                   </tr>
@@ -168,9 +181,12 @@ export default async function DashboardPage() {
                       <td className="px-6 py-4 text-right font-medium text-rose-600">
                         {r.withdraw ? `฿${Number(r.withdraw).toLocaleString('th-TH', { minimumFractionDigits: 2 })}` : '-'}
                       </td>
-                      <td className="px-6 py-4 text-right font-medium text-amber-600">
-                        {r.expenses ? `฿${Number(r.expenses).toLocaleString('th-TH', { minimumFractionDigits: 2 })}` : '-'}
-                      </td>
+                      {/* ยอดค่าใช้จ่ายแต่ละแถว แสดงเฉพาะ Super Admin */}
+                      {isSuperAdmin && (
+                        <td className="px-6 py-4 text-right font-medium text-amber-600">
+                          {r.expenses ? `฿${Number(r.expenses).toLocaleString('th-TH', { minimumFractionDigits: 2 })}` : '-'}
+                        </td>
+                      )}
                       <td className="px-6 py-4 text-slate-500">{r.notes || '-'}</td>
                     </tr>
                   ))
