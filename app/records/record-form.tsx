@@ -146,7 +146,7 @@ export default function RecordForm({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-bold !text-black mb-1">📢 ค่าโฆษณา / Ads</label>
+              <label className="block text-xs font-semibold !text-black mb-1">📢 ค่าโฆษณา / Ads</label>
               <input
                 type="number"
                 step="0.01"
@@ -158,7 +158,7 @@ export default function RecordForm({
               />
             </div>
             <div>
-              <label className="block text-xs font-bold !text-black mb-1">🏷️ ค่าธรรมเนียม / ค่าคอม</label>
+              <label className="block text-xs font-semibold !text-black mb-1">🏷️ ค่าธรรมเนียม / ค่าคอม</label>
               <input
                 type="number"
                 step="0.01"
@@ -170,7 +170,7 @@ export default function RecordForm({
               />
             </div>
             <div>
-              <label className="block text-xs font-bold !text-black mb-1">📦 ค่าส่ง / พัสดุ</label>
+              <label className="block text-xs font-semibold !text-black mb-1">📱 ค่าระบบ / ค่าเซิร์ฟ</label>
               <input
                 type="number"
                 step="0.01"
@@ -182,7 +182,7 @@ export default function RecordForm({
               />
             </div>
             <div>
-              <label className="block text-xs font-bold !text-black mb-1">👥 ค่าจ้าง / OT</label>
+              <label className="block text-xs font-semibold !text-black mb-1">👥 ค่าจ้าง / OT</label>
               <input
                 type="number"
                 step="0.01"
@@ -194,7 +194,7 @@ export default function RecordForm({
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-xs font-bold !text-black mb-1">🧩 ค่าใช้จ่ายอื่นๆ</label>
+              <label className="block text-xs font-semibold !text-black mb-1">🧩 ค่าใช้จ่ายอื่นๆ</label>
               <input
                 type="number"
                 step="0.01"
