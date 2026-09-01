@@ -1,11 +1,20 @@
 export const dynamic = 'force-dynamic'
 
+import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 import { getBrands } from '@/actions/records'
 import RecordForm from './record-form'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 
 export default async function RecordsPage() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  if (!user) {
+    redirect('/login')
+  }
+
   const brands = await getBrands()
 
   return (

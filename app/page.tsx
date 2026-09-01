@@ -1,13 +1,32 @@
 export const dynamic = 'force-dynamic'
 
 import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { PlusCircle, Building2 } from 'lucide-react'
+import { PlusCircle, Building2, LogOut, UserCheck } from 'lucide-react'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
 
-  // ดึงข้อมูลรายการทั้งหมด
+  // 1. ตรวจสอบ User
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  if (!user) {
+    redirect('/login')
+  }
+
+  // 2. ตรวจสอบ Role จากตาราง profiles
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role, email')
+    .eq('id', user.id)
+    .single()
+
+  const isSuperAdmin = profile?.role === 'super_admin'
+
+  // 3. ดึงข้อมูลบันทึกยอด
   const { data: recordsData } = await supabase
     .from('daily_records')
     .select('*, brands(name)')
@@ -15,11 +34,19 @@ export default async function DashboardPage() {
 
   const records = recordsData || []
 
-  // คำนวณยอดรวมต่างๆ แบบปลอดภัยจาก TypeScript Error
+  // คำนวณสรุปยอด
   const totalDeposit = records.reduce((acc: number, r: any) => acc + (Number(r.deposit) || 0), 0)
   const totalWithdraw = records.reduce((acc: number, r: any) => acc + (Number(r.withdraw) || 0), 0)
   const totalExpenses = records.reduce((acc: number, r: any) => acc + (Number(r.expenses) || 0), 0)
   const netProfit = totalDeposit - totalWithdraw - totalExpenses
+
+  // Server Action สำหรับ Logout
+  async function handleLogout() {
+    'use server'
+    const supabase = await createClient()
+    await supabase.auth.signOut()
+    redirect('/login')
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 py-10 px-4 sm:px-6 lg:px-8">
@@ -27,17 +54,33 @@ export default async function DashboardPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl shadow-sm border border-slate-200">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold !text-black">Dashboard สรุปภาพรวม</h1>
-            <p className="text-slate-500 text-sm mt-1">ติดตามยอดเงินและกำไรขาดทุนประจำวัน</p>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl sm:text-3xl font-bold !text-black">Dashboard สรุปภาพรวม</h1>
+              <span
+                className={`text-xs px-2.5 py-1 rounded-full font-bold ${
+                  isSuperAdmin
+                    ? 'bg-purple-100 text-purple-700'
+                    : 'bg-blue-100 text-blue-700'
+                }`}
+              >
+                {isSuperAdmin ? 'Super Admin' : 'Admin'}
+              </span>
+            </div>
+            <p className="text-slate-500 text-sm mt-1">ผู้ใช้งาน: {user.email}</p>
           </div>
+
           <div className="flex items-center gap-3">
-            <Link
-              href="/brands"
-              className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 !text-black font-semibold rounded-xl transition"
-            >
-              <Building2 className="w-4 h-4" />
-              <span>จัดการแบรนด์</span>
-            </Link>
+            {/* ปุ่มจัดการแบรนด์ จะแสดงเฉพาะ Super Admin เท่านั้น */}
+            {isSuperAdmin && (
+              <Link
+                href="/brands"
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 !text-black font-semibold rounded-xl transition"
+              >
+                <Building2 className="w-4 h-4" />
+                <span>จัดการแบรนด์</span>
+              </Link>
+            )}
+
             <Link
               href="/records"
               className="inline-flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 !text-white font-semibold rounded-xl transition shadow-md shadow-blue-500/20"
@@ -45,6 +88,17 @@ export default async function DashboardPage() {
               <PlusCircle className="w-4 h-4" />
               <span>บันทึกยอดรายวัน</span>
             </Link>
+
+            <form action={handleLogout}>
+              <button
+                type="submit"
+                className="inline-flex items-center gap-2 px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 font-semibold rounded-xl transition cursor-pointer"
+                title="ออกจากระบบ"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>ออกจากระบบ</span>
+              </button>
+            </form>
           </div>
         </div>
 
@@ -79,7 +133,7 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* ตารางแสดงรายการล่าสุด */}
+        {/* ตารางประวัติบันทึกยอด */}
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-6 border-b border-slate-100">
             <h2 className="text-lg font-bold !text-black">ประวัติการบันทึกยอด</h2>
