@@ -26,7 +26,7 @@ export default async function DashboardPage({
 }) {
   const supabase = await createClient()
 
-  // 1. ตรวจสอบสิทธิ์การเข้าใช้งาน
+  // 1. ตรวจสอบสิทธิ์ผู้ใช้
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -43,11 +43,11 @@ export default async function DashboardPage({
 
   const isSuperAdmin = profile?.role === 'super_admin'
 
-  // 2. ดึงรายชื่อแบรนด์ทั้งหมด
+  // 2. ดึงรายชื่อแบรนด์
   const { data: brandsData } = await supabase.from('brands').select('id, name').order('name')
   const brands = brandsData || []
 
-  // 3. จัดการค่าตัวกรอง
+  // 3. จัดการค่าพารามิเตอร์
   const resolvedParams = await searchParams
   const selectedDate = resolvedParams?.date?.trim() || ''
   const selectedMonth = resolvedParams?.month?.trim() || ''
@@ -76,7 +76,7 @@ export default async function DashboardPage({
   }
 
   const { data: recordsData } = await query
-  const records = recordsData || []
+  const records = (recordsData || []) as any[]
 
   // คำนวณสรุปยอด
   const totalDeposit = records.reduce((acc: number, r: any) => acc + (Number(r.deposit) || 0), 0)

@@ -47,22 +47,36 @@ export default async function DailyRecordPage({
     } = await supabase.auth.getUser()
     if (!user) return
 
-    const date = formData.get('date') as string
-    const brand_id = formData.get('brand_id') as string
-    const deposit = parseFloat(formData.get('deposit') as string) || 0
-    const withdraw = parseFloat(formData.get('withdraw') as string) || 0
+const date = formData.get('date') as string
+    const brand_id = (formData.get('brand_id') as string) || null
+    const depositRaw = formData.get('deposit') as string
+    const withdrawRaw = formData.get('withdraw') as string
+
+    const deposit = depositRaw ? parseFloat(depositRaw) : 0
+    const withdraw = withdrawRaw ? parseFloat(withdrawRaw) : 0
     const notes = (formData.get('notes') as string) || null
 
-    await supabase.from('daily_records').insert([
+    const { error: insertError } = await supabase.from('daily_records').insert([
       {
         date,
-        brand_id,
+        brand_id: brand_id || null,
         deposit,
         withdraw,
         notes,
         created_by: user.id,
       },
     ])
+
+    if (insertError) {
+      console.error('Insert Error:', insertError.message)
+      redirect(`/records/daily?error=${encodeURIComponent(insertError.message)}`)
+    }
+
+    revalidatePath('/', 'layout')
+    revalidatePath('/')
+    revalidatePath('/brands-summary')
+    revalidatePath('/records/daily')
+    redirect('/?date=' + date)
 
     // ล้างแคชทุกหน้า และพาเด้งกลับไปหน้าแรกทันที
     revalidatePath('/', 'layout')
