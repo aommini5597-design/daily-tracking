@@ -64,9 +64,12 @@ export default async function DailyRecordPage({
       },
     ])
 
+    // ล้างแคชทุกหน้า และพาเด้งกลับไปหน้าแรกทันที
+    revalidatePath('/', 'layout')
     revalidatePath('/')
+    revalidatePath('/brands-summary')
     revalidatePath('/records/daily')
-    redirect('/records/daily?success=true')
+    redirect('/?success=true')
   }
 
   // Server Action สำหรับ Logout
@@ -88,8 +91,8 @@ export default async function DailyRecordPage({
         onLogout={handleLogout}
       />
 
-      <main className="flex-1 p-6 sm:p-10 max-w-4xl overflow-y-auto">
-        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8">
+      <main className="flex-1 p-4 sm:p-8 md:p-10 max-w-4xl overflow-y-auto">
+        <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 mt-12 md:mt-0">
           <div className="flex items-center gap-3 mb-6 pb-6 border-slate-100 border-b">
             <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
               <BadgePercent className="w-5 h-5" />

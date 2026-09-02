@@ -1,4 +1,5 @@
 export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
@@ -25,6 +26,7 @@ export default async function DashboardPage({
 }) {
   const supabase = await createClient()
 
+  // 1. ตรวจสอบสิทธิ์การเข้าใช้งาน
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -41,14 +43,17 @@ export default async function DashboardPage({
 
   const isSuperAdmin = profile?.role === 'super_admin'
 
+  // 2. ดึงรายชื่อแบรนด์ทั้งหมด
   const { data: brandsData } = await supabase.from('brands').select('id, name').order('name')
   const brands = brandsData || []
 
+  // 3. จัดการค่าตัวกรอง
   const resolvedParams = await searchParams
   const selectedDate = resolvedParams?.date?.trim() || ''
   const selectedMonth = resolvedParams?.month?.trim() || ''
   const selectedBrand = resolvedParams?.brand_id?.trim() || ''
 
+  // 4. Query ดึงข้อมูล
   let query = supabase
     .from('daily_records')
     .select('*, brands(name)')
@@ -73,6 +78,7 @@ export default async function DashboardPage({
   const { data: recordsData } = await query
   const records = recordsData || []
 
+  // คำนวณสรุปยอด
   const totalDeposit = records.reduce((acc: number, r: any) => acc + (Number(r.deposit) || 0), 0)
   const totalWithdraw = records.reduce((acc: number, r: any) => acc + (Number(r.withdraw) || 0), 0)
   const totalExpenses = records.reduce((acc: number, r: any) => acc + (Number(r.expenses) || 0), 0)
@@ -84,9 +90,9 @@ export default async function DashboardPage({
     ? `แสดงข้อมูลประจำเดือน ${selectedMonth}`
     : 'แสดงข้อมูลทั้งหมดทุกช่วงเวลา'
 
-  // ลิงก์ดาวน์โหลด CSV พร้อมพารามิเตอร์ตัวกรองเดียวกัน
   const exportUrl = `/api/export?date=${selectedDate}&month=${selectedMonth}&brand_id=${selectedBrand}`
 
+  // Server Action ลบรายการ
   async function handleDeleteRecord(formData: FormData) {
     'use server'
     const id = formData.get('id') as string
@@ -94,10 +100,13 @@ export default async function DashboardPage({
 
     const supabase = await createClient()
     await supabase.from('daily_records').delete().eq('id', id)
+    revalidatePath('/', 'layout')
     revalidatePath('/')
+    revalidatePath('/brands-summary')
     revalidatePath('/expenses-summary')
   }
 
+  // Server Action ออกจากระบบ
   async function handleLogout() {
     'use server'
     const supabase = await createClient()
@@ -111,14 +120,13 @@ export default async function DashboardPage({
 
       <main className="flex-1 p-4 sm:p-8 md:p-10 overflow-y-auto max-w-7xl">
         <div className="space-y-8 mt-12 md:mt-0">
-          {/* Header & Filter Controls */}
+          {/* Header & Filter Bar */}
           <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold !text-black">Dashboard ภาพรวม</h1>
               <p className="text-blue-600 font-semibold text-sm mt-1">{filterLabel}</p>
             </div>
 
-            {/* กล่องตัวกรอง & Export */}
             <div className="flex flex-wrap items-center gap-2">
               <form method="get" className="flex flex-wrap items-center gap-2">
                 <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-2 rounded-2xl border border-slate-200">
@@ -165,12 +173,10 @@ export default async function DashboardPage({
                 </button>
               </form>
 
-              {/* ปุ่มดาวน์โหลด CSV */}
               <a
                 href={exportUrl}
                 download
                 className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 !text-white text-xs font-bold rounded-2xl transition shadow-sm cursor-pointer"
-                title="ดาวน์โหลดไฟล์ Excel / CSV"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>Export CSV</span>
@@ -188,7 +194,7 @@ export default async function DashboardPage({
             </div>
           </div>
 
-          {/* การ์ดสรุปยอด */}
+          {/* สรุปยอด 4 การ์ด */}
           <div
             className={`grid grid-cols-1 sm:grid-cols-2 ${
               isSuperAdmin ? 'lg:grid-cols-4' : 'lg:grid-cols-2'
@@ -251,7 +257,7 @@ export default async function DashboardPage({
             )}
           </div>
 
-          {/* ตารางแสดงรายการพร้อมปุ่มแก้ไขและปุ่มลบ */}
+          {/* ตารางแสดงรายการ */}
           <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
               <div>
@@ -304,7 +310,6 @@ export default async function DashboardPage({
                         )}
                         <td className="px-6 py-4 text-slate-500 max-w-xs truncate">{r.notes || '-'}</td>
 
-                        {/* ปุ่มแก้ไข + ปุ่มลบ แสดงเฉพาะ Super Admin */}
                         {isSuperAdmin && (
                           <td className="px-6 py-4 text-center whitespace-nowrap">
                             <div className="flex items-center justify-center gap-1">
