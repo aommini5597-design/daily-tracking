@@ -39,7 +39,7 @@ export default async function DailyRecordPage({
   const isSuccess = resolvedParams?.success === 'true'
   const errorMessage = resolvedParams?.error
 
-  // Server Action สำหรับบันทึกยอด
+  // Server Action สำหรับบันทึกยอด (ตรวจเช็กถ้ามีข้อมูลแล้วให้อัปเดตแทน)
   async function handleDailySubmit(formData: FormData) {
     'use server'
     const supabase = await createClient()
@@ -65,22 +65,45 @@ export default async function DailyRecordPage({
     const withdraw = withdrawRaw && !isNaN(Number(withdrawRaw)) ? Number(withdrawRaw) : 0
     const notes = notesRaw?.trim() ? notesRaw.trim() : null
 
-    // ยิง Insert ลง Supabase
-    const { error: insertError } = await supabase.from('daily_records').insert([
-      {
-        date,
-        brand_id,
-        deposit,
-        withdraw,
-        expenses: 0,
-        notes,
-        created_by: user.id,
-      },
-    ])
+    // ตรวจสอบว่าในวันนั้น แบรนด์นั้น มีบันทึกอยู่แล้วหรือไม่
+    const { data: existingRecord } = await supabase
+      .from('daily_records')
+      .select('id, notes')
+      .eq('date', date)
+      .eq('brand_id', brand_id)
+      .maybeSingle()
 
-    if (insertError) {
-      // ถ้าติด Error ส่งข้อความไปโชว์ที่หน้าเว็บทันที
-      redirect('/records/daily?error=' + encodeURIComponent(insertError.message))
+    let dbError = null
+
+    if (existingRecord) {
+      // มีอยู่แล้ว (เช่น มีค่าใช้จ่ายอยู่ก่อน) -> ให้อัปเดตยอดฝาก-ถอนเพิ่มเข้าไป
+      const { error: updateError } = await supabase
+        .from('daily_records')
+        .update({
+          deposit,
+          withdraw,
+          notes: notes || existingRecord.notes,
+        })
+        .eq('id', existingRecord.id)
+      dbError = updateError
+    } else {
+      // ยังไม่มีข้อมูล -> สร้างแถวใหม่
+      const { error: insertError } = await supabase.from('daily_records').insert([
+        {
+          date,
+          brand_id,
+          deposit,
+          withdraw,
+          expenses: 0,
+          notes,
+          created_by: user.id,
+        },
+      ])
+      dbError = insertError
+    }
+
+    if (dbError) {
+      redirect('/records/daily?error=' + encodeURIComponent(dbError.message))
     }
 
     revalidatePath('/', 'layout')
@@ -120,12 +143,11 @@ export default async function DailyRecordPage({
             </div>
           </div>
 
-          {/* กล่องแจ้งเตือนเมื่อมี Error ตัวแดง */}
           {errorMessage && (
             <div className="mb-6 p-4 bg-rose-50 border border-rose-200 rounded-2xl text-rose-700 text-sm font-bold flex items-start gap-2.5">
               <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
               <div>
-                <p className="font-black">เกิดข้อผิดพลาดจาก Supabase:</p>
+                <p className="font-black">เกิดข้อผิดพลาด:</p>
                 <p className="font-mono text-xs mt-1 text-rose-800 break-all">{errorMessage}</p>
               </div>
             </div>
