@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import Sidebar from './components/sidebar'
+import Link from 'next/link'
 import {
   Calendar,
   TrendingUp,
@@ -13,6 +14,8 @@ import {
   RotateCcw,
   Trash2,
   Filter,
+  Download,
+  Edit2,
 } from 'lucide-react'
 
 export default async function DashboardPage({
@@ -22,7 +25,6 @@ export default async function DashboardPage({
 }) {
   const supabase = await createClient()
 
-  // 1. ตรวจสอบสิทธิ์การเข้าใช้งาน
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -39,40 +41,31 @@ export default async function DashboardPage({
 
   const isSuperAdmin = profile?.role === 'super_admin'
 
-  // 2. รายชื่อแบรนด์ทั้งหมด
   const { data: brandsData } = await supabase.from('brands').select('id, name').order('name')
   const brands = brandsData || []
 
-  // 3. จัดการค่าพารามิเตอร์ (ตัดช่องว่างและค่าว่างทิ้ง)
   const resolvedParams = await searchParams
   const selectedDate = resolvedParams?.date?.trim() || ''
   const selectedMonth = resolvedParams?.month?.trim() || ''
   const selectedBrand = resolvedParams?.brand_id?.trim() || ''
 
-  // 4. สร้าง Query ดึงข้อมูล
   let query = supabase
     .from('daily_records')
     .select('*, brands(name)')
     .order('date', { ascending: false })
 
-  // ลำดับเงื่อนไข: ถ้าระบุวัน ให้กรองตามวัน
   if (selectedDate) {
     query = query.eq('date', selectedDate)
-  } 
-  // ถ้าไม่ระบุวัน แต่ระบุเดือน ให้คำนวณวันเริ่มต้นและวันสิ้นเดือนที่แท้จริง
-  else if (selectedMonth) {
+  } else if (selectedMonth) {
     const [year, month] = selectedMonth.split('-').map(Number)
     if (year && month) {
       const startDate = `${selectedMonth}-01`
-      // หาวันสุดท้ายของเดือนนั้นๆ อย่างถูกต้อง (เช่น เดือน 9 จะได้ 30, เดือน 2 จะได้ 28/29)
       const lastDay = new Date(year, month, 0).getDate()
       const endDate = `${selectedMonth}-${String(lastDay).padStart(2, '0')}`
-
       query = query.gte('date', startDate).lte('date', endDate)
     }
   }
 
-  // กรองตามแบรนด์ (ถ้ามีการเลือก)
   if (selectedBrand) {
     query = query.eq('brand_id', selectedBrand)
   }
@@ -80,20 +73,20 @@ export default async function DashboardPage({
   const { data: recordsData } = await query
   const records = recordsData || []
 
-  // คำนวณยอดสรุป
   const totalDeposit = records.reduce((acc: number, r: any) => acc + (Number(r.deposit) || 0), 0)
   const totalWithdraw = records.reduce((acc: number, r: any) => acc + (Number(r.withdraw) || 0), 0)
   const totalExpenses = records.reduce((acc: number, r: any) => acc + (Number(r.expenses) || 0), 0)
   const netProfit = totalDeposit - totalWithdraw - totalExpenses
 
-  // ป้ายกำกับหัวข้อ
   const filterLabel = selectedDate
     ? `แสดงข้อมูลประจำวันที่ ${selectedDate}`
     : selectedMonth
     ? `แสดงข้อมูลประจำเดือน ${selectedMonth}`
     : 'แสดงข้อมูลทั้งหมดทุกช่วงเวลา'
 
-  // Server Action: ลบรายการ
+  // ลิงก์ดาวน์โหลด CSV พร้อมพารามิเตอร์ตัวกรองเดียวกัน
+  const exportUrl = `/api/export?date=${selectedDate}&month=${selectedMonth}&brand_id=${selectedBrand}`
+
   async function handleDeleteRecord(formData: FormData) {
     'use server'
     const id = formData.get('id') as string
@@ -105,7 +98,6 @@ export default async function DashboardPage({
     revalidatePath('/expenses-summary')
   }
 
-  // Server Action: ออกจากระบบ
   async function handleLogout() {
     'use server'
     const supabase = await createClient()
@@ -117,8 +109,8 @@ export default async function DashboardPage({
     <div className="min-h-screen bg-slate-50 flex">
       <Sidebar userEmail={user.email} role={profile?.role} onLogout={handleLogout} />
 
-      <main className="flex-1 p-6 sm:p-10 overflow-y-auto max-w-7xl">
-        <div className="space-y-8">
+      <main className="flex-1 p-4 sm:p-8 md:p-10 overflow-y-auto max-w-7xl">
+        <div className="space-y-8 mt-12 md:mt-0">
           {/* Header & Filter Controls */}
           <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
             <div>
@@ -126,53 +118,63 @@ export default async function DashboardPage({
               <p className="text-blue-600 font-semibold text-sm mt-1">{filterLabel}</p>
             </div>
 
-            {/* กล่องตัวกรอง */}
-            <form method="get" className="flex flex-wrap items-center gap-2">
-              {/* เลือกแบรนด์ */}
-              <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-2 rounded-2xl border border-slate-200">
-                <Filter className="w-3.5 h-3.5 text-slate-500" />
-                <select
-                  name="brand_id"
-                  defaultValue={selectedBrand}
-                  className="bg-transparent text-xs font-bold !text-black outline-none cursor-pointer"
+            {/* กล่องตัวกรอง & Export */}
+            <div className="flex flex-wrap items-center gap-2">
+              <form method="get" className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-2 rounded-2xl border border-slate-200">
+                  <Filter className="w-3.5 h-3.5 text-slate-500" />
+                  <select
+                    name="brand_id"
+                    defaultValue={selectedBrand}
+                    className="bg-transparent text-xs font-bold !text-black outline-none cursor-pointer"
+                  >
+                    <option value="">ทุกแบรนด์</option>
+                    {brands.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-2 rounded-2xl border border-slate-200">
+                  <span className="text-xs font-bold text-slate-500">วัน:</span>
+                  <input
+                    type="date"
+                    name="date"
+                    defaultValue={selectedDate}
+                    className="bg-transparent text-xs font-bold !text-black outline-none cursor-pointer"
+                  />
+                </div>
+
+                <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-2 rounded-2xl border border-slate-200">
+                  <Calendar className="w-3.5 h-3.5 text-slate-500" />
+                  <input
+                    type="month"
+                    name="month"
+                    defaultValue={selectedMonth}
+                    className="bg-transparent text-xs font-bold !text-black outline-none cursor-pointer"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 !text-white text-xs font-bold rounded-2xl transition cursor-pointer shadow-sm"
                 >
-                  <option value="">ทุกแบรนด์</option>
-                  {brands.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  กรองข้อมูล
+                </button>
+              </form>
 
-              {/* เลือกรายวัน */}
-              <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-2 rounded-2xl border border-slate-200">
-                <span className="text-xs font-bold text-slate-500">วัน:</span>
-                <input
-                  type="date"
-                  name="date"
-                  defaultValue={selectedDate}
-                  className="bg-transparent text-xs font-bold !text-black outline-none cursor-pointer"
-                />
-              </div>
-
-              {/* เลือกรายเดือน */}
-              <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-2 rounded-2xl border border-slate-200">
-                <Calendar className="w-3.5 h-3.5 text-slate-500" />
-                <input
-                  type="month"
-                  name="month"
-                  defaultValue={selectedMonth}
-                  className="bg-transparent text-xs font-bold !text-black outline-none cursor-pointer"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 !text-white text-xs font-bold rounded-2xl transition cursor-pointer shadow-sm"
+              {/* ปุ่มดาวน์โหลด CSV */}
+              <a
+                href={exportUrl}
+                download
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 !text-white text-xs font-bold rounded-2xl transition shadow-sm cursor-pointer"
+                title="ดาวน์โหลดไฟล์ Excel / CSV"
               >
-                กรองข้อมูล
-              </button>
+                <Download className="w-3.5 h-3.5" />
+                <span>Export CSV</span>
+              </a>
 
               {(selectedDate || selectedMonth || selectedBrand) && (
                 <a
@@ -183,7 +185,7 @@ export default async function DashboardPage({
                   <span>ล้างตัวกรอง</span>
                 </a>
               )}
-            </form>
+            </div>
           </div>
 
           {/* การ์ดสรุปยอด */}
@@ -249,12 +251,12 @@ export default async function DashboardPage({
             )}
           </div>
 
-          {/* ตารางแสดงรายการ */}
+          {/* ตารางแสดงรายการพร้อมปุ่มแก้ไขและปุ่มลบ */}
           <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-bold !text-black">ประวัติรายการบันทึก</h2>
-                <p className="text-xs text-slate-400 mt-0.5">คลิกไอคอนถังขยะเพื่อลบรายการที่กรอกผิด</p>
+                <p className="text-xs text-slate-400 mt-0.5">กดปุ่มดินสอเพื่อแก้ไข หรือถังขยะเพื่อลบ</p>
               </div>
               <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3.5 py-1 rounded-full">
                 ทั้งหมด {records.length} รายการ
@@ -302,18 +304,28 @@ export default async function DashboardPage({
                         )}
                         <td className="px-6 py-4 text-slate-500 max-w-xs truncate">{r.notes || '-'}</td>
 
+                        {/* ปุ่มแก้ไข + ปุ่มลบ แสดงเฉพาะ Super Admin */}
                         {isSuperAdmin && (
-                          <td className="px-6 py-4 text-center">
-                            <form action={handleDeleteRecord}>
-                              <input type="hidden" name="id" value={r.id} />
-                              <button
-                                type="submit"
-                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                                title="ลบรายการนี้"
+                          <td className="px-6 py-4 text-center whitespace-nowrap">
+                            <div className="flex items-center justify-center gap-1">
+                              <Link
+                                href={`/records/edit/${r.id}`}
+                                className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                                title="แก้ไขรายการนี้"
                               >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </form>
+                                <Edit2 className="w-4 h-4" />
+                              </Link>
+                              <form action={handleDeleteRecord}>
+                                <input type="hidden" name="id" value={r.id} />
+                                <button
+                                  type="submit"
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                                  title="ลบรายการนี้"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </form>
+                            </div>
                           </td>
                         )}
                       </tr>
