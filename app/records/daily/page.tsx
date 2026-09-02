@@ -110,7 +110,7 @@ export default async function DailyRecordPage({
     revalidatePath('/')
     revalidatePath('/brands-summary')
     revalidatePath('/records/daily')
-    redirect('/?date=' + date)
+    redirect('/records/daily?success=true')
   }
 
   async function handleLogout() {
