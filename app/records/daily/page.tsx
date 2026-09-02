@@ -6,15 +6,14 @@ import { revalidatePath } from 'next/cache'
 import Sidebar from '../../components/sidebar'
 import { BadgePercent } from 'lucide-react'
 
-async function getBrands() {
-  const supabase = await createClient()
-  const { data } = await supabase.from('brands').select('id, name').order('name')
-  return data || []
-}
-
-export default async function DailyRecordPage() {
+export default async function DailyRecordPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ success?: string }>
+}) {
   const supabase = await createClient()
 
+  // 1. ตรวจสอบสิทธิ์ผู้ใช้
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -25,16 +24,27 @@ export default async function DailyRecordPage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, email')
+    .select('role')
     .eq('id', user.id)
     .single()
 
-  const brands = await getBrands()
+  // 2. ดึงรายชื่อแบรนด์
+  const { data: brandsData } = await supabase
+    .from('brands')
+    .select('id, name')
+    .order('name')
 
+  const brands = brandsData || []
+  const resolvedParams = await searchParams
+  const isSuccess = resolvedParams?.success === 'true'
+
+  // Server Action สำหรับบันทึกยอด
   async function handleDailySubmit(formData: FormData) {
     'use server'
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
     if (!user) return
 
     const date = formData.get('date') as string
@@ -56,8 +66,10 @@ export default async function DailyRecordPage() {
 
     revalidatePath('/')
     revalidatePath('/records/daily')
+    redirect('/records/daily?success=true')
   }
 
+  // Server Action สำหรับ Logout
   async function handleLogout() {
     'use server'
     const supabase = await createClient()
@@ -70,11 +82,15 @@ export default async function DailyRecordPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
-      <Sidebar userEmail={user.email} role={profile?.role} onLogout={handleLogout} />
+      <Sidebar
+        userEmail={user.email}
+        role={profile?.role}
+        onLogout={handleLogout}
+      />
 
-      <main className="flex-1 p-6 sm:p-10 max-w-4xl">
+      <main className="flex-1 p-6 sm:p-10 max-w-4xl overflow-y-auto">
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8">
-          <div className="flex items-center gap-3 mb-6 pb-6 border-b border-slate-100">
+          <div className="flex items-center gap-3 mb-6 pb-6 border-slate-100 border-b">
             <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
               <BadgePercent className="w-5 h-5" />
             </div>
@@ -83,6 +99,12 @@ export default async function DailyRecordPage() {
               <p className="text-slate-500 text-xs sm:text-sm mt-0.5">เฉพาะยอดเงินฝากและยอดเงินถอนของแต่ละแบรนด์</p>
             </div>
           </div>
+
+          {isSuccess && (
+            <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-800 text-sm font-semibold">
+              ✓ บันทึกยอดฝาก-ถอนเรียบร้อยแล้ว
+            </div>
+          )}
 
           <form action={handleDailySubmit} className="space-y-5">
             <div>
