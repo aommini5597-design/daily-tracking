@@ -6,15 +6,14 @@ import { revalidatePath } from 'next/cache'
 import Sidebar from '../../components/sidebar'
 import { Receipt } from 'lucide-react'
 
-async function getBrands() {
-  const supabase = await createClient()
-  const { data } = await supabase.from('brands').select('id, name').order('name')
-  return data || []
-}
-
-export default async function ExpensesRecordPage() {
+export default async function ExpensesRecordPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ success?: string }>
+}) {
   const supabase = await createClient()
 
+  // 1. ตรวจสอบสิทธิ์ Super Admin
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -25,21 +24,31 @@ export default async function ExpensesRecordPage() {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, email')
+    .select('role')
     .eq('id', user.id)
     .single()
 
-  // ล็อกสิทธิ์เฉพาะ Super Admin
   if (profile?.role !== 'super_admin') {
     redirect('/')
   }
 
-  const brands = await getBrands()
+  // 2. ดึงรายชื่อแบรนด์
+  const { data: brandsData } = await supabase
+    .from('brands')
+    .select('id, name')
+    .order('name')
 
+  const brands = brandsData || []
+  const resolvedParams = await searchParams
+  const isSuccess = resolvedParams?.success === 'true'
+
+  // Server Action สำหรับบันทึกค่าใช้จ่าย
   async function handleExpenseSubmit(formData: FormData) {
     'use server'
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
     if (!user) return
 
     const date = formData.get('date') as string
@@ -51,7 +60,8 @@ export default async function ExpensesRecordPage() {
     const labor_expense = parseFloat(formData.get('labor_expense') as string) || 0
     const other_expense = parseFloat(formData.get('other_expense') as string) || 0
 
-    const total_expenses = ads_expense + fee_expense + shipping_expense + labor_expense + other_expense
+    const total_expenses =
+      ads_expense + fee_expense + shipping_expense + labor_expense + other_expense
     const notes = (formData.get('notes') as string) || null
 
     await supabase.from('daily_records').insert([
@@ -70,9 +80,12 @@ export default async function ExpensesRecordPage() {
     ])
 
     revalidatePath('/')
+    revalidatePath('/expenses-summary')
     revalidatePath('/records/expenses')
+    redirect('/records/expenses?success=true')
   }
 
+  // Server Action สำหรับ Logout
   async function handleLogout() {
     'use server'
     const supabase = await createClient()
@@ -85,11 +98,15 @@ export default async function ExpensesRecordPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
-      <Sidebar userEmail={user.email} role={profile?.role} onLogout={handleLogout} />
+      <Sidebar
+        userEmail={user.email}
+        role="super_admin"
+        onLogout={handleLogout}
+      />
 
-      <main className="flex-1 p-6 sm:p-10 max-w-4xl">
+      <main className="flex-1 p-6 sm:p-10 max-w-4xl overflow-y-auto">
         <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8">
-          <div className="flex items-center gap-3 mb-6 pb-6 border-b border-slate-100">
+          <div className="flex items-center gap-3 mb-6 pb-6 border-slate-100 border-b">
             <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center">
               <Receipt className="w-5 h-5" />
             </div>
@@ -98,6 +115,12 @@ export default async function ExpensesRecordPage() {
               <p className="text-slate-500 text-xs sm:text-sm mt-0.5">เฉพาะผู้ดูแลระบบ (Super Admin)</p>
             </div>
           </div>
+
+          {isSuccess && (
+            <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-800 text-sm font-semibold">
+              ✓ บันทึกค่าใช้จ่ายเรียบร้อยแล้ว
+            </div>
+          )}
 
           <form action={handleExpenseSubmit} className="space-y-5">
             <div>
