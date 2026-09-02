@@ -2,9 +2,8 @@ export const dynamic = 'force-dynamic'
 
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import Sidebar from '@/components/sidebar'
+import Sidebar from './components/sidebar'
 import { Calendar, TrendingUp, TrendingDown, Wallet, DollarSign } from 'lucide-react'
-
 export default async function DashboardPage({
   searchParams,
 }: {

@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
-import Sidebar from '@/components/sidebar'
+import Sidebar from '../../components/sidebar'
 import { Receipt } from 'lucide-react'
 
 async function getBrands() {
