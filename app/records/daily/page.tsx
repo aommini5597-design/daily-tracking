@@ -4,16 +4,16 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import Sidebar from '../../components/sidebar'
-import { BadgePercent } from 'lucide-react'
+import { BadgePercent, AlertCircle, CheckCircle2 } from 'lucide-react'
 
 export default async function DailyRecordPage({
   searchParams,
 }: {
-  searchParams: Promise<{ success?: string }>
+  searchParams: Promise<{ success?: string; error?: string }>
 }) {
   const supabase = await createClient()
 
-  // 1. ตรวจสอบสิทธิ์ผู้ใช้
+  // 1. ตรวจสอบการ Login
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -37,6 +37,7 @@ export default async function DailyRecordPage({
   const brands = brandsData || []
   const resolvedParams = await searchParams
   const isSuccess = resolvedParams?.success === 'true'
+  const errorMessage = resolvedParams?.error
 
   // Server Action สำหรับบันทึกยอด
   async function handleDailySubmit(formData: FormData) {
@@ -45,31 +46,41 @@ export default async function DailyRecordPage({
     const {
       data: { user },
     } = await supabase.auth.getUser()
-    if (!user) return
 
-const date = formData.get('date') as string
-    const brand_id = (formData.get('brand_id') as string) || null
+    if (!user) {
+      redirect('/records/daily?error=' + encodeURIComponent('ไม่พบข้อมูลผู้ใช้งาน กรุณาเข้าสู่ระบบใหม่'))
+    }
+
+    const date = formData.get('date') as string
+    const brand_id = formData.get('brand_id') as string
     const depositRaw = formData.get('deposit') as string
     const withdrawRaw = formData.get('withdraw') as string
+    const notesRaw = formData.get('notes') as string
 
-    const deposit = depositRaw ? parseFloat(depositRaw) : 0
-    const withdraw = withdrawRaw ? parseFloat(withdrawRaw) : 0
-    const notes = (formData.get('notes') as string) || null
+    if (!date || !brand_id) {
+      redirect('/records/daily?error=' + encodeURIComponent('กรุณาเลือกวันที่และแบรนด์ให้ครบถ้วน'))
+    }
 
+    const deposit = depositRaw && !isNaN(Number(depositRaw)) ? Number(depositRaw) : 0
+    const withdraw = withdrawRaw && !isNaN(Number(withdrawRaw)) ? Number(withdrawRaw) : 0
+    const notes = notesRaw?.trim() ? notesRaw.trim() : null
+
+    // ยิง Insert ลง Supabase
     const { error: insertError } = await supabase.from('daily_records').insert([
       {
         date,
-        brand_id: brand_id || null,
+        brand_id,
         deposit,
         withdraw,
+        expenses: 0,
         notes,
         created_by: user.id,
       },
     ])
 
     if (insertError) {
-      console.error('Insert Error:', insertError.message)
-      redirect(`/records/daily?error=${encodeURIComponent(insertError.message)}`)
+      // ถ้าติด Error ส่งข้อความไปโชว์ที่หน้าเว็บทันที
+      redirect('/records/daily?error=' + encodeURIComponent(insertError.message))
     }
 
     revalidatePath('/', 'layout')
@@ -77,16 +88,8 @@ const date = formData.get('date') as string
     revalidatePath('/brands-summary')
     revalidatePath('/records/daily')
     redirect('/?date=' + date)
-
-    // ล้างแคชทุกหน้า และพาเด้งกลับไปหน้าแรกทันที
-    revalidatePath('/', 'layout')
-    revalidatePath('/')
-    revalidatePath('/brands-summary')
-    revalidatePath('/records/daily')
-    redirect('/?success=true')
   }
 
-  // Server Action สำหรับ Logout
   async function handleLogout() {
     'use server'
     const supabase = await createClient()
@@ -117,9 +120,21 @@ const date = formData.get('date') as string
             </div>
           </div>
 
+          {/* กล่องแจ้งเตือนเมื่อมี Error ตัวแดง */}
+          {errorMessage && (
+            <div className="mb-6 p-4 bg-rose-50 border border-rose-200 rounded-2xl text-rose-700 text-sm font-bold flex items-start gap-2.5">
+              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-black">เกิดข้อผิดพลาดจาก Supabase:</p>
+                <p className="font-mono text-xs mt-1 text-rose-800 break-all">{errorMessage}</p>
+              </div>
+            </div>
+          )}
+
           {isSuccess && (
-            <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-800 text-sm font-semibold">
-              ✓ บันทึกยอดฝาก-ถอนเรียบร้อยแล้ว
+            <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-emerald-800 text-sm font-semibold flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+              <span>บันทึกยอดฝาก-ถอนเรียบร้อยแล้ว</span>
             </div>
           )}
 
