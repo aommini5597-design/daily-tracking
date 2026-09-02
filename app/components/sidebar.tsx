@@ -52,6 +52,12 @@ export default function Sidebar({ userEmail, role, onLogout }: SidebarProps) {
       superOnly: true,
     },
     {
+      title: 'สรุปยอดตามแบรนด์',
+      href: '/brands-summary',
+      icon: Building2,
+      superOnly: false,
+    },
+    {
       title: 'จัดการแบรนด์',
       href: '/brands',
       icon: Building2,
