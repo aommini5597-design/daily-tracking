@@ -3,11 +3,12 @@ export const dynamic = 'force-dynamic'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import Sidebar from './components/sidebar'
-import { Calendar, TrendingUp, TrendingDown, Wallet, DollarSign } from 'lucide-react'
+import { Calendar, TrendingUp, TrendingDown, Wallet, DollarSign, RotateCcw } from 'lucide-react'
+
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string }>
+  searchParams: Promise<{ month?: string; date?: string }>
 }) {
   const supabase = await createClient()
 
@@ -29,32 +30,39 @@ export default async function DashboardPage({
 
   const isSuperAdmin = profile?.role === 'super_admin'
 
-  // 3. กำหนดตัวกรองเดือน (ค่าเริ่มต้นคือเดือนปัจจุบัน YYYY-MM)
+  // 3. รับค่าตัวกรองทั้งแบบ "รายวัน (date)" และ "รายเดือน (month)"
   const resolvedParams = await searchParams
-  const today = new Date()
-  const currentMonthStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
-  const selectedMonth = resolvedParams?.month || currentMonthStr
+  const selectedDate = resolvedParams?.date || ''
+  const selectedMonth = resolvedParams?.month || ''
 
-  // 4. ดึงข้อมูลบันทึกยอดทั้งหมดที่ตรงกับเดือนที่เลือก
-  const startDate = `${selectedMonth}-01`
-  const endDate = `${selectedMonth}-31`
-
-  const { data: recordsData } = await supabase
+  // 4. Query ข้อมูลตามเงื่อนไขที่เลือก
+  let query = supabase
     .from('daily_records')
     .select('*, brands(name)')
-    .gte('date', startDate)
-    .lte('date', endDate)
     .order('date', { ascending: false })
 
+  if (selectedDate) {
+    query = query.eq('date', selectedDate)
+  } else if (selectedMonth) {
+    query = query.gte('date', `${selectedMonth}-01`).lte('date', `${selectedMonth}-31`)
+  }
+
+  const { data: recordsData } = await query
   const records = recordsData || []
 
-  // คำนวณสรุปยอดรวมทั้งเดือน
+  // คำนวณผลรวมตามที่เลือก
   const totalDeposit = records.reduce((acc: number, r: any) => acc + (Number(r.deposit) || 0), 0)
   const totalWithdraw = records.reduce((acc: number, r: any) => acc + (Number(r.withdraw) || 0), 0)
   const totalExpenses = records.reduce((acc: number, r: any) => acc + (Number(r.expenses) || 0), 0)
   const netProfit = totalDeposit - totalWithdraw - totalExpenses
 
-  // Server Action ออกจากระบบ
+  // ป้ายกำกับหัวข้อแสดงผล
+  const filterLabel = selectedDate
+    ? `ยอดประจำวันที่ ${selectedDate}`
+    : selectedMonth
+    ? `ยอดประจำเดือน ${selectedMonth}`
+    : 'ยอดรวมทั้งหมดทุกช่วงเวลา'
+
   async function handleLogout() {
     'use server'
     const supabase = await createClient()
@@ -64,51 +72,75 @@ export default async function DashboardPage({
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
-      {/* เมนูด้านข้าง Sidebar */}
-      <Sidebar
-        userEmail={user.email}
-        role={profile?.role}
-        onLogout={handleLogout}
-      />
+      <Sidebar userEmail={user.email} role={profile?.role} onLogout={handleLogout} />
 
-      {/* เนื้อหาหลัก Main Content */}
       <main className="flex-1 p-6 sm:p-10 overflow-y-auto max-w-7xl">
         <div className="space-y-8">
-          {/* Header Bar ด้านบน */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+          {/* Header & Filter Controls */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold !text-black">Dashboard ภาพรวม</h1>
-              <p className="text-slate-500 text-sm mt-1">สรุปข้อมูลยอดเงินรายวันและยอดรวมประจำเดือน</p>
+              <p className="text-blue-600 font-semibold text-sm mt-1">{filterLabel}</p>
             </div>
 
-            {/* ช่องเลือกเดือนสำหรับกรองข้อมูล */}
-            <form method="get" className="flex items-center gap-2 bg-slate-50 p-1.5 rounded-2xl border border-slate-200">
-              <Calendar className="w-4 h-4 text-slate-500 ml-2" />
-              <input
-                type="month"
-                name="month"
-                defaultValue={selectedMonth}
-                className="bg-transparent text-sm font-bold !text-black outline-none px-2 py-1 cursor-pointer"
-              />
-              <button
-                type="submit"
-                className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 !text-white text-xs font-bold rounded-xl transition cursor-pointer"
-              >
-                กรองเดือน
-              </button>
-            </form>
+            {/* กล่องเลือกกรอง: รายวัน หรือ รายเดือน */}
+            <div className="flex flex-wrap items-center gap-3">
+              {/* ฟอร์มกรองรายวัน */}
+              <form method="get" className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-2xl border border-slate-200">
+                <span className="text-xs font-bold text-slate-500">รายวัน:</span>
+                <input
+                  type="date"
+                  name="date"
+                  defaultValue={selectedDate}
+                  className="bg-transparent text-xs font-bold !text-black outline-none cursor-pointer"
+                />
+                <button
+                  type="submit"
+                  className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 !text-white text-xs font-bold rounded-lg transition"
+                >
+                  ดูวัน
+                </button>
+              </form>
+
+              {/* ฟอร์มกรองรายเดือน */}
+              <form method="get" className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-2xl border border-slate-200">
+                <span className="text-xs font-bold text-slate-500">รายเดือน:</span>
+                <input
+                  type="month"
+                  name="month"
+                  defaultValue={selectedMonth}
+                  className="bg-transparent text-xs font-bold !text-black outline-none cursor-pointer"
+                />
+                <button
+                  type="submit"
+                  className="px-2.5 py-1 bg-slate-800 hover:bg-black !text-white text-xs font-bold rounded-lg transition"
+                >
+                  ดูเดือน
+                </button>
+              </form>
+
+              {/* ปุ่มล้างตัวกรองเพื่อดูทั้งหมด */}
+              {(selectedDate || selectedMonth) && (
+                <a
+                  href="/"
+                  className="inline-flex items-center gap-1 px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded-2xl transition"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>ดูทั้งหมด</span>
+                </a>
+              )}
+            </div>
           </div>
 
-          {/* การ์ดสรุปยอดรวมประจำเดือน */}
+          {/* การ์ดสรุปยอด */}
           <div
             className={`grid grid-cols-1 sm:grid-cols-2 ${
               isSuperAdmin ? 'lg:grid-cols-4' : 'lg:grid-cols-2'
             } gap-5`}
           >
-            {/* ยอดฝาก */}
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
               <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-bold text-slate-500 uppercase">ยอดฝากรวมเดือนนี้</span>
+                <span className="text-xs font-bold text-slate-500 uppercase">ยอดฝาก</span>
                 <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
                   <TrendingUp className="w-4 h-4" />
                 </div>
@@ -118,10 +150,9 @@ export default async function DashboardPage({
               </p>
             </div>
 
-            {/* ยอดถอน */}
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
               <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-bold text-slate-500 uppercase">ยอดถอนรวมเดือนนี้</span>
+                <span className="text-xs font-bold text-slate-500 uppercase">ยอดถอน</span>
                 <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
                   <TrendingDown className="w-4 h-4" />
                 </div>
@@ -131,12 +162,11 @@ export default async function DashboardPage({
               </p>
             </div>
 
-            {/* ซ่อนค่าใช้จ่ายและกำไรสุทธิ ถ้าไม่ใช่ Super Admin */}
             {isSuperAdmin && (
               <>
                 <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-bold text-slate-500 uppercase">ค่าใช้จ่ายรวมเดือนนี้</span>
+                    <span className="text-xs font-bold text-slate-500 uppercase">ค่าใช้จ่าย</span>
                     <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
                       <Wallet className="w-4 h-4" />
                     </div>
@@ -148,7 +178,7 @@ export default async function DashboardPage({
 
                 <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
                   <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-bold text-slate-500 uppercase">กำไรสุทธิประจำเดือน</span>
+                    <span className="text-xs font-bold text-slate-500 uppercase">กำไรสุทธิ</span>
                     <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
                       <DollarSign className="w-4 h-4" />
                     </div>
@@ -165,14 +195,14 @@ export default async function DashboardPage({
             )}
           </div>
 
-          {/* ตารางแสดงรายการแจกแจงรายวัน */}
+          {/* ตารางรายการ */}
           <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-bold !text-black">รายการประจำวัน ({selectedMonth})</h2>
-                <p className="text-xs text-slate-400 mt-0.5">แสดงเรียงตามลำดับวันที่ล่าสุด</p>
+                <h2 className="text-lg font-bold !text-black">รายการข้อมูล</h2>
+                <p className="text-xs text-slate-400 mt-0.5">แสดงตามเงื่อนไขที่เลือกกรอง</p>
               </div>
-              <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
+              <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3.5 py-1 rounded-full">
                 ทั้งหมด {records.length} รายการ
               </span>
             </div>
@@ -196,7 +226,7 @@ export default async function DashboardPage({
                         colSpan={isSuperAdmin ? 6 : 5}
                         className="px-6 py-12 text-center text-slate-400 font-medium"
                       >
-                        ไม่มีรายการบันทึกในเดือนนี้
+                        ไม่พบข้อมูลตามวันที่หรือเดือนที่เลือก
                       </td>
                     </tr>
                   ) : (
