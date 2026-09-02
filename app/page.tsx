@@ -22,7 +22,7 @@ export default async function DashboardPage({
 }) {
   const supabase = await createClient()
 
-  // 1. ตรวจสอบการ Login
+  // 1. ตรวจสอบสิทธิ์การเข้าใช้งาน
   const {
     data: { user },
   } = await supabase.auth.getUser()
@@ -31,7 +31,6 @@ export default async function DashboardPage({
     redirect('/login')
   }
 
-  // 2. ดึงสิทธิ์ User
   const { data: profile } = await supabase
     .from('profiles')
     .select('role, email')
@@ -40,28 +39,40 @@ export default async function DashboardPage({
 
   const isSuperAdmin = profile?.role === 'super_admin'
 
-  // 3. ดึงรายชื่อแบรนด์ทั้งหมดมาใส่ Dropdown กรอง
+  // 2. รายชื่อแบรนด์ทั้งหมด
   const { data: brandsData } = await supabase.from('brands').select('id, name').order('name')
   const brands = brandsData || []
 
-  // 4. รับค่าตัวกรอง: วันที่, เดือน, แบรนด์
+  // 3. จัดการค่าพารามิเตอร์ (ตัดช่องว่างและค่าว่างทิ้ง)
   const resolvedParams = await searchParams
-  const selectedDate = resolvedParams?.date || ''
-  const selectedMonth = resolvedParams?.month || ''
-  const selectedBrand = resolvedParams?.brand_id || ''
+  const selectedDate = resolvedParams?.date?.trim() || ''
+  const selectedMonth = resolvedParams?.month?.trim() || ''
+  const selectedBrand = resolvedParams?.brand_id?.trim() || ''
 
-  // 5. Query ข้อมูลตามเงื่อนไข
+  // 4. สร้าง Query ดึงข้อมูล
   let query = supabase
     .from('daily_records')
     .select('*, brands(name)')
     .order('date', { ascending: false })
 
+  // ลำดับเงื่อนไข: ถ้าระบุวัน ให้กรองตามวัน
   if (selectedDate) {
     query = query.eq('date', selectedDate)
-  } else if (selectedMonth) {
-    query = query.gte('date', `${selectedMonth}-01`).lte('date', `${selectedMonth}-31`)
+  } 
+  // ถ้าไม่ระบุวัน แต่ระบุเดือน ให้คำนวณวันเริ่มต้นและวันสิ้นเดือนที่แท้จริง
+  else if (selectedMonth) {
+    const [year, month] = selectedMonth.split('-').map(Number)
+    if (year && month) {
+      const startDate = `${selectedMonth}-01`
+      // หาวันสุดท้ายของเดือนนั้นๆ อย่างถูกต้อง (เช่น เดือน 9 จะได้ 30, เดือน 2 จะได้ 28/29)
+      const lastDay = new Date(year, month, 0).getDate()
+      const endDate = `${selectedMonth}-${String(lastDay).padStart(2, '0')}`
+
+      query = query.gte('date', startDate).lte('date', endDate)
+    }
   }
 
+  // กรองตามแบรนด์ (ถ้ามีการเลือก)
   if (selectedBrand) {
     query = query.eq('brand_id', selectedBrand)
   }
@@ -69,13 +80,20 @@ export default async function DashboardPage({
   const { data: recordsData } = await query
   const records = recordsData || []
 
-  // รวมยอดคำนวณ
+  // คำนวณยอดสรุป
   const totalDeposit = records.reduce((acc: number, r: any) => acc + (Number(r.deposit) || 0), 0)
   const totalWithdraw = records.reduce((acc: number, r: any) => acc + (Number(r.withdraw) || 0), 0)
   const totalExpenses = records.reduce((acc: number, r: any) => acc + (Number(r.expenses) || 0), 0)
   const netProfit = totalDeposit - totalWithdraw - totalExpenses
 
-  // Server Action ลบรายการ
+  // ป้ายกำกับหัวข้อ
+  const filterLabel = selectedDate
+    ? `แสดงข้อมูลประจำวันที่ ${selectedDate}`
+    : selectedMonth
+    ? `แสดงข้อมูลประจำเดือน ${selectedMonth}`
+    : 'แสดงข้อมูลทั้งหมดทุกช่วงเวลา'
+
+  // Server Action: ลบรายการ
   async function handleDeleteRecord(formData: FormData) {
     'use server'
     const id = formData.get('id') as string
@@ -87,7 +105,7 @@ export default async function DashboardPage({
     revalidatePath('/expenses-summary')
   }
 
-  // Server Action ออกจากระบบ
+  // Server Action: ออกจากระบบ
   async function handleLogout() {
     'use server'
     const supabase = await createClient()
@@ -105,19 +123,13 @@ export default async function DashboardPage({
           <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold !text-black">Dashboard ภาพรวม</h1>
-              <p className="text-slate-500 text-sm mt-1">
-                {selectedDate
-                  ? `แสดงข้อมูลประจำวันที่ ${selectedDate}`
-                  : selectedMonth
-                  ? `แสดงข้อมูลประจำเดือน ${selectedMonth}`
-                  : 'แสดงข้อมูลทั้งหมดทุกช่วงเวลา'}
-              </p>
+              <p className="text-blue-600 font-semibold text-sm mt-1">{filterLabel}</p>
             </div>
 
-            {/* กล่องตัวกรองแบบครบวงจร */}
+            {/* กล่องตัวกรอง */}
             <form method="get" className="flex flex-wrap items-center gap-2">
               {/* เลือกแบรนด์ */}
-              <div className="flex items-center gap-1 bg-slate-50 px-3 py-1.5 rounded-2xl border border-slate-200">
+              <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-2 rounded-2xl border border-slate-200">
                 <Filter className="w-3.5 h-3.5 text-slate-500" />
                 <select
                   name="brand_id"
@@ -134,7 +146,7 @@ export default async function DashboardPage({
               </div>
 
               {/* เลือกรายวัน */}
-              <div className="flex items-center gap-1 bg-slate-50 px-3 py-1.5 rounded-2xl border border-slate-200">
+              <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-2 rounded-2xl border border-slate-200">
                 <span className="text-xs font-bold text-slate-500">วัน:</span>
                 <input
                   type="date"
@@ -145,7 +157,7 @@ export default async function DashboardPage({
               </div>
 
               {/* เลือกรายเดือน */}
-              <div className="flex items-center gap-1 bg-slate-50 px-3 py-1.5 rounded-2xl border border-slate-200">
+              <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-2 rounded-2xl border border-slate-200">
                 <Calendar className="w-3.5 h-3.5 text-slate-500" />
                 <input
                   type="month"
@@ -237,7 +249,7 @@ export default async function DashboardPage({
             )}
           </div>
 
-          {/* ตารางแสดงรายการพร้อมปุ่มลบสำหรับ Super Admin */}
+          {/* ตารางแสดงรายการ */}
           <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
               <div>
@@ -290,7 +302,6 @@ export default async function DashboardPage({
                         )}
                         <td className="px-6 py-4 text-slate-500 max-w-xs truncate">{r.notes || '-'}</td>
 
-                        {/* ปุ่มลบรายการ แสดงเฉพาะ Super Admin */}
                         {isSuperAdmin && (
                           <td className="px-6 py-4 text-center">
                             <form action={handleDeleteRecord}>
